@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>라스트 네이버 - 스테이지 1 (리메이크)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Roboto:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #000;
+            color: #fff;
+            overflow: hidden;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            /* 우클릭 메뉴 방지용 커서 설정 */
+            cursor: crosshair;
+        }
+
+        .creepster-font {
+            font-family: 'Creepster', cursive;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #050505;
+        }
+
+        /* 뷰 컨트롤 (자물쇠 화면 vs 복도 화면) */
+        .view-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            transition: opacity 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .view-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #view-lock {
+            justify-content: center;
+            align-items: center;
+            background-image: 
+                radial-gradient(circle at center, #1a1512 0%, #000 80%),
+                repeating-linear-gradient(45deg, #111 0, #111 2px, #0a0a0a 0, #0a0a0a 50%);
+            background-size: 100% 100%, 10px 10px;
+        }
+
+        #door-panel {
+            width: 400px;
+            height: 600px;
+            background-color: #2b1d11;
+            background-image: linear-gradient(to right, rgba(0,0,0,0.9), transparent 20%, transparent 80%, rgba(0,0,0,0.9));
+            border: 8px solid #140d07;
+            border-radius: 10px;
+            box-shadow: inset 0 0 50px black;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        #lock-interactive {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, #444, #111);
+            border-radius: 50%;
+            border: 6px solid #222;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: crosshair;
+            transition: top 0.6s ease-in-out, left 0.6s ease-in-out;
+            z-index: 5;
+        }
+
+        #lock-interactive.picking {
+            border-color: #32cd32;
+            box-shadow: 0 0 30px rgba(50,205,50,0.5), inset 0 0 20px black;
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        .keyhole {
+            width: 20px;
+            height: 50px;
+            background-color: #000;
+            border-radius: 10px 10px 5px 5px;
+            position: relative;
+        }
+        .keyhole::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: -10px;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 25px solid #000;
+        }
+
+        #progress-container {
+            width: 80%;
+            height: 20px;
+            background-color: #000;
+            margin-top: 40px;
+            border: 2px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #8b0000, #ff8c00, #32cd32);
+            transition: width 0.1s;
+        }
+
+        #view-hallway {
+            background-color: #0d0906; /* 낡은 저택 배경색 */
+            background-image:
+                /* 천장 그림자 */
+                linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, transparent 20%),
+                /* 바닥 그림자 */
+                linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 25%),
+                /* 마룻바닥 텍스처 (하단 25%) */
+                repeating-linear-gradient(to right, transparent 0, transparent 40px, rgba(0,0,0,0.6) 40px, rgba(0,0,0,0.6) 43px),
+                linear-gradient(to top, #140d08 0%, #140d08 25%, transparent 25%),
+                /* 낡고 기괴한 세로줄 벽지 */
+                repeating-linear-gradient(to right, #1a100b 0, #1a100b 50px, #140c08 50px, #140c08 100px);
+            display: flex;
+            justify-content: space-evenly;
+            align-items: flex-end;
+            padding-bottom: 2%;
+        }
+
+        /* 두 갈래 길 사이 벽에 걸린 기괴한 액자 장식 (분위기용) */
+        #view-hallway::after {
+            content: '';
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70px;
+            height: 90px;
+            background-color: #111;
+            border: 6px solid #080503;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.9);
+            background-image: radial-gradient(circle at center, #2a1111 0%, #000 70%);
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .hallway-side {
+            width: 38%;
+            height: 85%;
+            position: relative;
+            background-color: #020202;
+            /* 두꺼운 나무 문틀 */
+            border: 18px solid #080503;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            /* 문턱 너머 끝을 알 수 없는 어둠과 문틀 밖 그림자 */
+            box-shadow: 
+                inset 0 0 80px 30px #000, 
+                20px 0 40px rgba(0,0,0,0.9), 
+                -20px 0 40px rgba(0,0,0,0.9);
+            overflow: hidden;
+            transition: background-color 0.3s;
+            z-index: 1; /* 중앙 액자 위로 오게 */
+        }
+
+        /* 복도 깊이감을 더해주는 가상의 바닥 원근선 */
+        .hallway-side::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(to bottom, #000 40%, transparent 80%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .hallway-side:last-child {
+            /* 우측 문틀 덮어쓰기 */
+            border-left: 18px solid #080503;
+        }
+
+        .dim-light {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* 손전등 불빛이 안쪽으로 빨려들어가는 듯한 효과 */
+            background: radial-gradient(circle at center 60%, rgba(200, 220, 255, 0.15) 0%, rgba(200, 220, 255, 0.05) 35%, rgba(0,0,0,0.9) 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 3;
+        }
+
+        /* 마우스가 올려진 쪽의 불빛을 켬 */
+        .hallway-side:hover .dim-light {
+            opacity: 1;
+        }
+
+        /* 살인마 (Enemy) */
+        .enemy-silhouette {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            width: 300px;
+            height: 300px;
+            transform: translateX(-50%) scale(0.5);
+            opacity: 0;
+            z-index: 2; /* 조명보다는 아래, 배경보다는 위 */
+            filter: drop-shadow(0 0 20px black);
+            transition: transform 0.5s ease-out;
+            pointer-events: none;
+        }
+
+        /* 적이 스폰되어 있고, 해당 복도에 마우스를 올렸을 때 모습 노출 */
+        .hallway-side:hover .enemy-silhouette.active {
+            opacity: 0.9;
+            filter: drop-shadow(0 0 15px rgba(255, 0, 0, 0.5));
+        }
+
+        /* 플래시라이트 발사 효과 (우클릭) */
+        #camera-flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 99;
+            transition: opacity 0.1s;
+        }
+
+        .flash-bang {
+            animation: flash-anim 0.3s ease-out;
+        }
+
+        @keyframes flash-anim {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hidden { display: none !important; }
+
+        .btn-style {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            background-color: #500;
+            color: white;
+            border: 2px solid #f00;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-style:hover { background-color: #800; }
+
+        /* 경고 노이즈 */
+        .noise {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.05;
+            background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+        }
+
+        #view-indicator {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.5);
+            font-size: 1.2rem;
+            z-index: 30;
+            pointer-events: none;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 1px solid #333;
+        }
+
+        #jumpscare-container {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: black;
+            z-index: 999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .jumpscare-anim {
+            animation: jumpScare 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        @keyframes jumpScare {
+            0% { transform: scale(0.1) translateY(100px); opacity: 0; }
+            30% { opacity: 1; }
+            100% { transform: scale(4.5) translateY(10%); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="noise"></div>
+    <div id="camera-flash"></div>
+    <div id="view-indicator">[SPACEBAR] 시점 전환</div>
+
+    <div id="game-container">
+        
+        <div id="view-lock" class="view-screen active">
+            <div id="door-panel">
+                <div id="lock-interactive" title="자물쇠 위에 마우스를 올려두세요">
+                    <div class="keyhole"></div>
+                </div>
+                <div class="mt-8 text-gray-400 font-bold tracking-widest">자물쇠 진행도</div>
+                <div id="progress-container">
+                    <div id="progress-bar"></div>
+                </div>
+                <div id="progress-text" class="mt-2 text-xl font-mono text-white">0%</div>
+                
+                <div class="absolute bottom-4 text-sm text-gray-500 text-center">도망치는 자물쇠 위에<br>마우스 커서를 올리세요</div>
+            </div>
+        </div>
+
+        <div id="view-hallway" class="view-screen">
+            <!-- 왼쪽 복도 -->
+            <div id="hallway-left" class="hallway-side" data-side="left">
+                <div class="dim-light"></div>
+                <div id="enemy-left" class="enemy-silhouette">
+                    <svg viewBox="0 0 200 200" width="100%" height="100%">
+                        <path d="M 40 200 Q 10 100 40 50 Q 100 0 160 50 Q 190 100 160 200 Z" fill="#000"/>
+                        <path d="M 50 200 Q 30 120 60 70 Q 100 30 140 70 Q 170 120 150 200 Z" fill="#111"/>
+                        <circle cx="75" cy="90" r="12" fill="#fff" filter="drop-shadow(0 0 5px white)"/>
+                        <circle cx="125" cy="90" r="12" fill="#fff" filter="drop-shadow(0 0 5px white)"/>
+                        <circle cx="75" cy="90" r="4" fill="#000"/>
+                        <circle cx="125" cy="90" r="4" fill="#000"/>
+                        <path d="M 60 140 L 70 150 L 80 135 L 90 155 L 100 140 L 110 155 L 120 135 L 130 150 L 140 140 L 135 160 L 120 170 L 100 175 L 80 170 L 65 160 Z" fill="#fff"/>
+                    </svg>
+                </div>
+            </div>
+            
+            <!-- 오른쪽 복도 -->
+            <div id="hallway-right" class="hallway-side" data-side="right">
+                <div class="dim-light"></div>
+                <div id="enemy-right" class="enemy-silhouette">
+                    <svg viewBox="0 0 200 200" width="100%" height="100%">
+                        <path d="M 40 200 Q 10 100 40 50 Q 100 0 160 50 Q 190 100 160 200 Z" fill="#000"/>
+                        <path d="M 50 200 Q 30 120 60 70 Q 100 30 140 70 Q 170 120 150 200 Z" fill="#111"/>
+                        <circle cx="75" cy="90" r="12" fill="#fff" filter="drop-shadow(0 0 5px white)"/>
+                        <circle cx="125" cy="90" r="12" fill="#fff" filter="drop-shadow(0 0 5px white)"/>
+                        <circle cx="75" cy="90" r="4" fill="#000"/>
+                        <circle cx="125" cy="90" r="4" fill="#000"/>
+                        <path d="M 60 140 L 70 150 L 80 135 L 90 155 L 100 140 L 110 155 L 120 135 L 130 150 L 140 140 L 135 160 L 120 170 L 100 175 L 80 170 L 65 160 Z" fill="#fff"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="jumpscare-container" class="hidden">
+        <svg id="jumpscare-img" viewBox="0 0 200 200" width="400px" height="400px">
+            <path d="M 30 200 Q 0 100 30 30 Q 100 -20 170 30 Q 200 100 170 200 Z" fill="#000"/>
+            <path d="M 40 200 Q 20 120 50 60 Q 100 10 150 60 Q 180 120 160 200 Z" fill="#111"/>
+            <circle cx="70" cy="85" r="15" fill="#f00" filter="drop-shadow(0 0 10px red)"/>
+            <circle cx="130" cy="85" r="15" fill="#f00" filter="drop-shadow(0 0 10px red)"/>
+            <circle cx="70" cy="85" r="5" fill="#000"/>
+            <circle cx="130" cy="85" r="5" fill="#000"/>
+            <!-- Even bigger, scarier mouth for jumpscare -->
+            <path d="M 50 140 L 65 165 L 80 130 L 95 170 L 105 130 L 120 170 L 135 130 L 150 165 L 150 150 L 135 190 L 120 195 L 100 200 L 80 195 L 65 190 Z" fill="#fff"/>
+        </svg>
+    </div>
+
+    <div id="ui-overlay">
+        <h1 id="ui-title" class="creepster-font text-6xl text-red-600 mb-4 drop-shadow-[0_0_10px_red]">LAST NEIGHBOR</h1>
+        <h2 id="ui-subtitle" class="text-2xl mb-8 text-gray-300">STAGE 1</h2>
+        
+        <div id="instruction-box" class="bg-gray-900 border border-gray-700 p-6 rounded text-left max-w-xl mb-8">
+            <h3 class="text-xl font-bold text-red-500 mb-4 border-b border-gray-700 pb-2">생존 수칙</h3>
+            <ul class="list-disc pl-5 space-y-3 text-gray-300">
+                <li><strong class="text-white">SPACEBAR:</strong> 자물쇠 화면과 복도 화면을 전환합니다.</li>
+                <li><strong class="text-yellow-400">자물쇠 따기 (마우스 올리기):</strong> 자물쇠 화면에서 이리저리 움직이는 둥근 자물쇠를 마우스로 쫓아가 커서를 올려두세요. 100%가 되면 탈출합니다.</li>
+                <li><strong class="text-blue-400">복도 확인 (마우스 이동):</strong> 복도 화면에서 좌/우로 마우스를 옮기면 희미한 불빛이 켜져 적의 실루엣을 확인할 수 있습니다.</li>
+                <li><strong class="text-red-400">플래시 공격 (우클릭):</strong> 살인마가 확인된 쪽에 마우스를 두고 우클릭하여 플래시를 터뜨려 쫓아내세요.</li>
+                <li><strong class="text-red-600 font-bold underline">주의사항:</strong> <br>1. 적이 없는데 허공에 플래시(우클릭)를 터뜨리면 즉시 발각되어 사망합니다.<br>2. <strong>살인마를 발견하고 0.65초 안에 플래시를 쓰지 않으면 사망합니다.</strong></li>
+            </ul>
+        </div>
+
+        <button id="btn-start" class="btn-style">게임 시작</button>
+    </div>
+
+    <script>
+        // DOM Elements
+        const uiOverlay = document.getElementById('ui-overlay');
+        const uiTitle = document.getElementById('ui-title');
+        const uiSubtitle = document.getElementById('ui-subtitle');
+        const instructionBox = document.getElementById('instruction-box');
+        const btnStart = document.getElementById('btn-start');
+        
+        const viewLock = document.getElementById('view-lock');
+        const viewHallway = document.getElementById('view-hallway');
+        const viewIndicator = document.getElementById('view-indicator');
+        
+        const lockInteractive = document.getElementById('lock-interactive');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        
+        const enemyLeft = document.getElementById('enemy-left');
+        const enemyRight = document.getElementById('enemy-right');
+        const cameraFlash = document.getElementById('camera-flash');
+
+        // Game State
+        let isGameRunning = false;
+        let currentView = 'lock'; // 'lock' or 'hallway'
+        let lockProgress = 0;
+        let isPicking = false;
+        
+        // Enemy State
+        let enemyActive = false;
+        let enemySide = null; // 'left' or 'right'
+        let dangerLevel = 0; // 0 to 100
+        const MAX_DANGER = 100;
+        let reactionTimer = null; // 0.65초 반응용 타이머
+        let isSpotted = false; // 발견 여부
+        
+        // Move Lock State
+        let lockX = 150;
+        let lockY = 250;
+        let targetLockX = 150;
+        let targetLockY = 250;
+        let moveTimer = 0;
+        
+        // Settings
+        const PICK_SPEED = 0.05; // 속도 대폭 감소
+        const ENEMY_SPAWN_CHANCE = 0.007; // 루프당 스폰 확률
+        let gameLoopInterval = null;
+        let lockMoveInterval = null;
+        let hoverSide = null; // 마우스가 위치한 복도 ('left' or 'right')
+
+        // --- 초기화 및 루프 ---
+        btnStart.addEventListener('click', startGame);
+
+        function startGame() {
+            uiOverlay.classList.add('hidden');
+            
+            isGameRunning = true;
+            currentView = 'lock';
+            lockProgress = 0;
+            isPicking = false;
+            
+            resetEnemy();
+            switchView('lock');
+            updateLockUI();
+            
+            gameLoopInterval = setInterval(gameLoop, 50);
+            lockMoveInterval = setInterval(moveLock, 800); // 0.8초마다 자물쇠 이동
+        }
+
+        function moveLock() {
+            if (currentView !== 'lock' || !isGameRunning) return;
+            // 패널 크기: 400x600, 자물쇠 크기: 100x100
+            const maxX = 300;
+            const maxY = 500;
+            const randomX = 50 + Math.random() * maxX;
+            const randomY = 50 + Math.random() * maxY;
+            
+            lockInteractive.style.top = `${randomY}px`;
+            lockInteractive.style.left = `${randomX}px`;
+        }
+
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            // 1. 자물쇠 따기 진행 (마우스 오버 중일 때)
+            if (isPicking && currentView === 'lock') {
+                lockProgress += PICK_SPEED;
+                updateLockUI();
+                if (lockProgress >= 100) {
+                    winGame();
+                }
+            }
+
+            // 1.5. 자물쇠 움직임
+            if (currentView === 'lock') {
+                moveTimer++;
+                if (moveTimer > 15) { // 0.75초마다 새 목표 위치 지정
+                    moveTimer = 0;
+                    // 가로 344 - 120 = 224, 세로 400 - 120 = 280
+                    targetLockX = Math.random() * 224;
+                    targetLockY = Math.random() * 280;
+                }
+                
+                // 자물쇠가 혼자 도망가고 보간으로 부드럽게 이동
+                lockX += (targetLockX - lockX) * 0.08;
+                lockY += (targetLockY - lockY) * 0.08;
+                
+                lockInteractive.style.left = `${lockX}px`;
+                lockInteractive.style.top = `${lockY}px`;
+            }
+
+            // 2. 살인마 스폰
+            if (!enemyActive && Math.random() < ENEMY_SPAWN_CHANCE) {
+                spawnEnemy();
+            }
+
+            // 3. 살인마 접근
+            if (enemyActive) {
+                dangerLevel += 0.8; // 다가오는 속도
+                updateEnemyVisual();
+                
+                // 시간이 지체되면 사망
+                if (dangerLevel >= MAX_DANGER) {
+                    gameOver("살인마가 당신의 뒤까지 다가왔습니다...");
+                }
+            }
+        }
+
+        // --- 시점 전환 (Spacebar) ---
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && isGameRunning) {
+                e.preventDefault(); // 스크롤 방지
+                
+                const nextView = currentView === 'lock' ? 'hallway' : 'lock';
+                switchView(nextView);
+            }
+        });
+
+        function switchView(viewName) {
+            currentView = viewName;
+            
+            if (viewName === 'lock') {
+                viewLock.classList.add('active');
+                viewHallway.classList.remove('active');
+                viewIndicator.textContent = "[SPACEBAR] 뒤돌아보기 (복도 확인)";
+                moveLock(); // 돌아올 때 위치 갱신
+            } else {
+                viewLock.classList.remove('active');
+                viewHallway.classList.add('active');
+                viewIndicator.textContent = "[SPACEBAR] 문으로 돌아가기 (자물쇠 따기)";
+                // 자물쇠 따기 강제 취소
+                stopPicking(); 
+            }
+        }
+
+        // --- 자물쇠 조작 (마우스 오버) ---
+        function startPicking(e) {
+            if (currentView !== 'lock' || !isGameRunning) return; 
+            isPicking = true;
+            lockInteractive.classList.add('picking');
+        }
+
+        function stopPicking() {
+            isPicking = false;
+            lockInteractive.classList.remove('picking');
+        }
+
+        lockInteractive.addEventListener('mouseenter', startPicking);
+        lockInteractive.addEventListener('mouseleave', stopPicking);
+
+        function updateLockUI() {
+            if (lockProgress > 100) lockProgress = 100;
+            progressBar.style.width = `${lockProgress}%`;
+            progressText.textContent = `${Math.floor(lockProgress)}%`;
+        }
+
+        // --- 복도 조작 (마우스 이동 및 우클릭) ---
+        // 마우스 위치 추적
+        document.querySelectorAll('.hallway-side').forEach(side => {
+            side.addEventListener('mouseenter', (e) => {
+                hoverSide = e.target.getAttribute('data-side');
+                
+                // 0.65초 반응 시스템
+                if (enemyActive && hoverSide === enemySide && !isSpotted) {
+                    isSpotted = true;
+                    reactionTimer = setTimeout(() => {
+                        gameOver("살인마를 발견하고 0.65초 안에 반응하지 못했습니다!");
+                    }, 650);
+                }
+            });
+            side.addEventListener('mouseleave', () => {
+                hoverSide = null;
+            });
+        });
+
+        // 우클릭 (플래시)
+        window.addEventListener('contextmenu', (e) => {
+            // 게임 중에는 기본 우클릭 메뉴 무조건 차단
+            e.preventDefault(); 
+            
+            if (!isGameRunning || currentView !== 'hallway') return;
+
+            // 플래시 이펙트 발동
+            triggerFlashEffect();
+
+            // 판정 로직
+            if (enemyActive && hoverSide === enemySide) {
+                // 정확한 쪽에 플래시를 터뜨림 (적 퇴치 성공)
+                scareEnemy();
+            } else {
+                // 적이 없는데 터뜨렸거나 엉뚱한 곳에 터뜨림 (즉사)
+                gameOver("허공에 플래시를 터뜨려 위치를 들켰습니다!");
+            }
+        });
+
+        function triggerFlashEffect() {
+            cameraFlash.classList.remove('flash-bang');
+            void cameraFlash.offsetWidth; // 리플로우 강제 트리거 (애니메이션 재시작)
+            cameraFlash.classList.add('flash-bang');
+        }
+
+        // --- 살인마 로직 ---
+        function spawnEnemy() {
+            enemyActive = true;
+            dangerLevel = 0;
+            enemySide = Math.random() < 0.5 ? 'left' : 'right';
+            
+            const targetEl = enemySide === 'left' ? enemyLeft : enemyRight;
+            targetEl.classList.add('active');
+            
+            // 소리나 연출을 추가할 수 있습니다 (예: 쿵 하는 소리)
+        }
+
+        function updateEnemyVisual() {
+            if (!enemyActive) return;
+            const targetEl = enemySide === 'left' ? enemyLeft : enemyRight;
+            
+            // 다가올수록 실루엣이 커짐
+            const scale = 0.5 + (dangerLevel / MAX_DANGER) * 1.5;
+            targetEl.style.transform = `translateX(-50%) scale(${scale})`;
+        }
+
+        function scareEnemy() {
+            resetEnemy();
+            // 쫓아냈을 때 화면 흔들림이나 안도하는 효과음 등을 추가 가능
+        }
+
+        function resetEnemy() {
+            enemyActive = false;
+            dangerLevel = 0;
+            enemySide = null;
+            isSpotted = false;
+            if (reactionTimer) clearTimeout(reactionTimer);
+            
+            enemyLeft.classList.remove('active');
+            enemyRight.classList.remove('active');
+            enemyLeft.style.transform = 'translateX(-50%) scale(0.5)';
+            enemyRight.style.transform = 'translateX(-50%) scale(0.5)';
+        }
+
+        // --- 결과 처리 ---
+        function gameOver(reason) {
+            isGameRunning = false;
+            clearInterval(gameLoopInterval);
+            clearInterval(lockMoveInterval);
+            if (reactionTimer) clearTimeout(reactionTimer);
+            
+            // Jumpscare 연출
+            const jumpscare = document.getElementById('jumpscare-container');
+            const jumpscareImg = document.getElementById('jumpscare-img');
+            
+            jumpscare.classList.remove('hidden');
+            jumpscareImg.classList.add('jumpscare-anim');
+            
+            setTimeout(() => {
+                jumpscare.classList.add('hidden');
+                jumpscareImg.classList.remove('jumpscare-anim');
+                
+                uiOverlay.classList.remove('hidden');
+                uiTitle.textContent = "YOU DIED";
+                uiTitle.classList.replace('text-red-600', 'text-red-800');
+                uiSubtitle.textContent = reason;
+                instructionBox.classList.add('hidden');
+                btnStart.textContent = "다시 시도";
+                
+                resetEnemy();
+            }, 1200); // 1.2초 후 게임 오버 화면 띄우기
+        }
+
+        function winGame() {
+            isGameRunning = false;
+            clearInterval(gameLoopInterval);
+            clearInterval(lockMoveInterval);
+            if (reactionTimer) clearTimeout(reactionTimer);
+            
+            uiOverlay.classList.remove('hidden');
+            uiTitle.textContent = "ESCAPED!";
+            uiTitle.classList.replace('text-red-600', 'text-green-500');
+            uiTitle.style.textShadow = '0 0 20px rgba(0,255,0,0.8)';
+            uiSubtitle.textContent = "자물쇠를 부수고 방을 빠져나왔습니다.";
+            instructionBox.classList.add('hidden');
+            btnStart.textContent = "다시 플레이";
+            
+            resetEnemy();
+        }
+
+    </script>
+</body>
+</html>
